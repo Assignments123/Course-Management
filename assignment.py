@@ -106,14 +106,35 @@ def index():
     return "Course Management Assignment"
 
 
-@assignment.route('/courses',methods = ['POST'])
+@assignment.route('/courses',methods = ['POST'])    # add logical endpoints eg to add courses /add-course; to get all courses /courses
 def addcourse():
-    # function to add a new course to table
+    """endpoint add course to `[table name]`.
+    Method
+    ------
+        POST
+
+    Paramter
+    --------
+        name:str
+            required:true
+            the name of course ...
+
+    Returns
+    -------
+        string:
+            [description]
+
+    Raises
+    ------
+        [details of exception] 
+    """
+    # function to add a new course to table    # docstring must in """docstring""" stating what endpoint doing, args/parameter details, return values
+    # request.get_json
     try:
-        if request.form['name'] == "":
+        if request.form['name'] == "":      # since we designing endpoints -> request.form won't work use request.get_json() we will test these by postman
             return "Name is empty"
         
-        if request.form['description'] == "":
+        if request.form['description'] == "":   # see if can raise custom exception 
             return "description is empty"
         
         if request.form['instructor'] == "":
