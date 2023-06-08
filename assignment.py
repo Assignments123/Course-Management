@@ -144,6 +144,7 @@ def index():
 
 
 @assignment.route('/addcourse',methods = ['POST'])    # add logical endpoints eg to add courses /add-course; to get all courses /courses
+@tokenvalidationmiddleware
 def addcourse():
     """Endpoint for adding a course to the course table.
     Method
@@ -230,6 +231,7 @@ def addcourse():
 
 
 @assignment.route('/addstudent',methods = ['POST'])
+@tokenvalidationmiddleware
 def addstudent():
     """Endpoint for adding a Student to the student table.
     Method
@@ -372,6 +374,7 @@ def addteacher():
 
 
 @assignment.route('/enrollcourse',methods=['POST'])
+@tokenvalidationmiddleware
 def enrollcourse():
     """Endpoint for enrolling a student to course.
     record will be added to course_student table
@@ -442,6 +445,7 @@ def enrollcourse():
         return response
 
 @assignment.route('/assignteacher',methods=['POST'])
+@tokenvalidationmiddleware
 def assignteacher():
     """Endpoint for Assigning a teacher to course.
         record will be added to course_teacher table
@@ -597,6 +601,7 @@ def getcourse(id):
     return result
 
 @assignment.route('/updatecourse/<id>',methods = ['PUT'])
+@tokenvalidationmiddleware
 def updatecourse(id):
     """Endpoint for updating a course record by id in course table
 
@@ -666,6 +671,7 @@ def updatecourse(id):
     
 
 @assignment.route('/deletecourse/<id>',methods = ['DELETE'])
+@tokenvalidationmiddleware
 def deletecourse(id):
     """Endpoint for deleting course from course table
 
