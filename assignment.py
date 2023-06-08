@@ -5,7 +5,9 @@ import datetime
 from sqlalchemy.exc import *
 import re
 from authentication import generatetoken , tokenvalidationmiddleware
-
+from sqlalchemy import create_engine ,inspect
+from sqlalchemy.schema import DDL
+import os
 
 # assignment.config['MYSQL_HOST'] = "localhost"
 # assignment.config['MYSQL_USER'] = "root"
@@ -26,22 +28,57 @@ from authentication import generatetoken , tokenvalidationmiddleware
 
 
 
+
+
+
 assignment = Flask(__name__)
-assignment.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:root@localhost/course_management'
+def createdatabase():
+    """ function for creating databse
+
+        returns:
+            database name
+        
+        raises:
+            OperationalError:
+                if credentials for connecting to mysql are wrong
+    """
+
+    database = os.getenv('DATABASE')
+
+    engine = create_engine('mysql+mysqlconnector://root:root@localhost:3306/')
+
+    # Connect to MySQL server
+    connection = engine.connect()
+
+    # SQL statement to create database if does not exist
+    query = DDL(f"CREATE DATABASE if not exists {database}")
+
+    connection.execute(query)
+    # Close the connection
+    connection.close()
+
+    return database
+
+database = createdatabase()
+
+# get name of database from createdatabase() function to connect to database
+assignment.config['SQLALCHEMY_DATABASE_URI'] = f'mysql://root:root@localhost/{database}'
 assignment.config['SQLALCHEMY_TRACK_MODIFICATIONS']= False
 db = SQLAlchemy(assignment)
 
 
 # Third table for course and student
 Course_Student = db.Table('course_student',
-    db.Column('courseid', db.Integer, db.ForeignKey('course.id')),
-    db.Column('studentid', db.Integer, db.ForeignKey('student.id'))
+    db.Column('courseid', db.Integer, db.ForeignKey('course.id' ,ondelete = 'CASCADE')),
+    db.Column('studentid', db.Integer, db.ForeignKey('student.id',ondelete = 'CASCADE')),
+    db.PrimaryKeyConstraint('courseid','studentid')
 )
 
 # Third table for course and teacher
 Course_Teacher = db.Table('course_teacher',
-    db.Column('courseid', db.Integer, db.ForeignKey('course.id')),
-    db.Column('teacherid', db.Integer, db.ForeignKey('teacher.id'))
+    db.Column('courseid', db.Integer, db.ForeignKey('course.id',ondelete = 'CASCADE')),
+    db.Column('teacherid', db.Integer, db.ForeignKey('teacher.id',ondelete = 'CASCADE')),
+    db.PrimaryKeyConstraint('courseid','teacherid')
 )
 
 # Model Course
@@ -106,9 +143,9 @@ def index():
     return "Course Management Assignment"
 
 
-@assignment.route('/courses',methods = ['POST'])    # add logical endpoints eg to add courses /add-course; to get all courses /courses
+@assignment.route('/addcourse',methods = ['POST'])    # add logical endpoints eg to add courses /add-course; to get all courses /courses
 def addcourse():
-    """endpoint add course to `[table name]`.
+    """Endpoint for adding a course to the course table.
     Method
     ------
         POST
@@ -117,40 +154,54 @@ def addcourse():
     --------
         name:str
             required:true
-            the name of course ...
+            the name of course
+        description:str
+            required:true
+            Short description of course
+        instructor:
+            required:true
+            the name of instructor
+        duration:
+            required:true
+            duration of course
+        start_date:
+            required:true
+            start date of course
 
     Returns
     -------
         string:
-            [description]
-
+            states if same course is already present
+            or new course is added to table
     Raises
     ------
-        [details of exception] 
+        Operational Error:
+            if any of above attributes are missing 
     """
     # function to add a new course to table    # docstring must in """docstring""" stating what endpoint doing, args/parameter details, return values
-    # request.get_json
+    # request.get_json()
     try:
-        if request.form['name'] == "":      # since we designing endpoints -> request.form won't work use request.get_json() we will test these by postman
+        data = request.get_json()
+        if data['name'] == "":      # since we designing endpoints -> request.form[] won't work use request.get_json() we will test these by postman
             return "Name is empty"
         
-        if request.form['description'] == "":   # see if can raise custom exception 
+        if data['description'] == "":   # see if can raise custom exception 
             return "description is empty"
         
-        if request.form['instructor'] == "":
+        if data['instructor'] == "":
             return "instructor is empty"
         
-        if request.form['duration'] == "":
+        if data['duration'] == "":
             return "duration is empty"
         
-        if request.form['start_date'] == "":
+        if data['start_date'] == "":
             return "start_date is empty"
         
-        name = request.form['name']
-        description = request.form['description']
-        instructor = request.form['instructor']
-        duration = request.form['duration']
-        start_date = request.form['start_date']
+        name = data['name']
+        description = data['description']
+        instructor = data['instructor']
+        duration = data['duration']
+        start_date = data['start_date']
 
         # check if course with same name is already present or not
         result = Course.query.filter(Course.name == name,\
@@ -174,26 +225,53 @@ def addcourse():
     
     except OperationalError as e:
 
-        response = "Exception is occured " + str(e)
+        response = {"error":"Please fill all fields"}
         return response
 
 
-@assignment.route('/student',methods = ['POST'])
+@assignment.route('/addstudent',methods = ['POST'])
 def addstudent():
-    # function to add a new record of student
+    """Endpoint for adding a Student to the student table.
+    Method
+    ------
+        POST
+
+    Paramter
+    --------
+        name:str
+            required:true
+            the name of student
+        email:str
+            required:true
+                email address of student
+        feepaid:
+            required:true
+            student fee status:paid or not paid
+
+    Returns
+    -------
+        string:
+            states if student with email id is already registered
+            or new student is added to table
+    Raises
+    ------
+        Operational Error:
+            if any of above attributes are missing 
+    """
     try:
-        if request.form['name']=="":
+        data = request.get_json()
+        if data['name']=="":
             return "name is empty"
         
-        if request.form['email']=="":
+        if data['email']=="":
             return "email is empty"
         
-        if request.form['feepaid'] == "":
+        if data['feepaid'] == "":
             return "feepaid is empty"
         
-        name = request.form['name']
-        email = request.form['email']
-        feepaid = request.form['feepaid']
+        name = data['name']
+        email = data['email']
+        feepaid = data['feepaid']
 
         string = re.compile(r'([A-Za-z0-9]+[._-])*[A-Za-z0-9]+@[A-Za-z0-9]+(\.[A-Z|a-z]{2,})+')
         if not re.fullmatch(string,email):
@@ -223,25 +301,52 @@ def addstudent():
         return "Student is registered succesfully!!"
     
     except OperationalError as e:
-        response = "Exception is occured"+str(e)
+        response = {"error":"Please fill all fields"}
         return response
 
-@assignment.route('/teacher',methods = ['POST'])
+@assignment.route('/addteacher',methods = ['POST'])
 def addteacher():
-    # function for registering a new teacher
+    """Endpoint for adding a Teacher to the teacher table.
+    Method
+    ------
+        POST
+
+    Paramter
+    --------
+        name:str
+            required:true
+            name of teacher
+        email:str
+            required:true
+                email address of teacher
+        password:
+            required:true
+            password for teacher
+
+    Returns
+    -------
+        string:
+            states if teacher with email id is already registered
+            or new teacher is added to table
+    Raises
+    ------
+        Operational Error:
+            if any of above attributes are missing 
+    """
     try:
-        if request.form['name'] == "":
+        data = request.get_json()
+        if data['name'] == "":
             return "name is empty"
         
-        if request.form['email'] == "":
+        if data['email'] == "":
             return "email is empty"
         
-        if request.form['password'] == "":
+        if data['password'] == "":
             return "password is empty"
         
-        name = request.form['name']
-        email = request.form['email']
-        password = request.form['password']
+        name = data['name']
+        email = data['email']
+        password = data['password']
 
         result = Teacher.query.filter(Teacher.email == email,\
                                       Teacher.deleted_at == None).first()
@@ -262,108 +367,211 @@ def addteacher():
 
     except OperationalError as e:
 
-        response = "Exception is occured"+str(e)
+        response = {"error":"Please fill all fields"}
         return response
 
 
 @assignment.route('/enrollcourse',methods=['POST'])
 def enrollcourse():
-    # function to enroll a course to student
-    if request.form['email'] == "":
-        return "email is empty"
-    
-    if request.form['course name'] == "":
-        return "course name is empty"
-    
-    studentemail = request.form['email']
-    coursename = request.form['course name']
+    """Endpoint for enrolling a student to course.
+    record will be added to course_student table
+    Method
+    ------
+        POST
 
-    studentdata = Student.query.filter(Student.name == studentemail,\
-                                       Student.deleted_at == None).first()
-    
-    if studentdata:
-        studentid = studentdata.id
+    Paramter
+    --------
+        email:str
+            required:true
+                email address of student
+        course name:
+            required:true
+            course name to which student will get enrolled
 
-    coursedata = Course.query.filter(Course.name == coursename,\
-                                     Course.deleted_at == None).first()
+    Returns
+    -------
+        string:
+            states if student is already enrolled to course
+            or student got enrolled to course
+    Raises
+    ------
+        Operational Error:
+            if any of above values are missing
+        Intigrity Error:
+            if student is already registered to same course 
+    """
+    try:
+        data = request.get_json()
+        if data['email'] == "":
+            return "email is empty"
+        
+        if data['course name'] == "":
+            return "course name is empty"
+        
+        studentemail = data['email']
+        coursename = data['course name']
 
-    if coursedata:
-        courseid = coursedata.id
+        studentdata = Student.query.filter(Student.email == studentemail,\
+                                        Student.deleted_at == None).first()
+        
+        if studentdata:
+            studentid = studentdata.id
 
-    print("id are:",courseid,studentid)
-    
-    query = Course_Student.insert().values(
-        courseid = courseid,
-        studentid=studentid
-    )
+        coursedata = Course.query.filter(Course.name == coursename,\
+                                        Course.deleted_at == None).first()
 
-    db.session.execute(query)
-    db.session.commit()
+        if coursedata:
+            courseid = coursedata.id
 
-    return "Student is seccessdully enrolled to course"
+        print("id are:",courseid,studentid)
+        
+        query = Course_Student.insert().values(
+            courseid = courseid,
+            studentid=studentid
+        )
+
+        db.session.execute(query)
+        db.session.commit()
+
+        return "Student is seccessfully enrolled to course"
+    except OperationalError:
+        response = {"error":"Please fill all fields"}
+        return response
+    except IntegrityError:
+        response = {"Message":"This Student is already enrolled to same course"}
+        return response
 
 @assignment.route('/assignteacher',methods=['POST'])
 def assignteacher():
-    # function to assign a teacher to perticular course
+    """Endpoint for Assigning a teacher to course.
+        record will be added to course_teacher table
+    Method
+    ------
+        POST
 
-    if request.form['email'] == "":
-        return "email is empty"
-    
-    if request.form['course name'] == "":
-        return "course name is empty"
-    
-    teacheremail = request.form['email']
-    coursename = request.form['course name']
+    Paramter
+    --------
+        email:str
+            required:true
+                email address of teacher
+        course name:
+            required:true
+            course name to which teacher will get assigned
 
-    teacher = Teacher.query.filter(Teacher.email == teacheremail,\
-                                   Teacher.deleted_at == None).first()
-
-    if teacher:
-        teacherid = teacher.id
-    else:
-        return f"No teacher is registered with email {teacheremail}"
-
-    course = Course.query.filter(Course.name == coursename,\
-                                 Course.deleted_at == None).first()
-
-    if course:
-        courseid = course.id
-    else:
-        return f"No course with name {coursename} is available"
-
-    query = Course_Teacher.insert().values(
-        courseid = courseid,
-        teacherid = teacherid
-    )
-
-    db.session.execute(query)
-    db.session.commit()
-
-    return "teacher is succesfully assigned to course"
-
-@assignment.route('/courses',methods = ['GET'])
-def getcourses():
-    # function to retrive all courses
-
-    records = Course.query.filter(Course.deleted_at == None).all()
-    result = []
-    for record in records:
-        result.append({
-                "name":record.name,
-                "description":record.description,
-                "instructor":record.instructor,
-                "duration":record.duration,
-                "start_date":record.start_date
-            })
+    Returns
+    -------
+        string:
+            states if teacher is already assigned to course
+            or teacher got assigned to course
+    Raises
+    ------
+        Operational Error:
+            if any of parameters are missing
+        Intigrity Error:
+            if teacher is already assigned to same course 
+    """
+    try:
+        data = request.get_json()
+        if data['email'] == "":
+            return "email is empty"
         
-    return result
+        if data['course name'] == "":
+            return "course name is empty"
+        
+        teacheremail = data['email']
+        coursename = data['course name']
+
+        teacher = Teacher.query.filter(Teacher.email == teacheremail,\
+                                    Teacher.deleted_at == None).first()
+
+        if teacher:
+            teacherid = teacher.id
+        else:
+            return f"No teacher is registered with email {teacheremail}"
+
+        course = Course.query.filter(Course.name == coursename,\
+                                    Course.deleted_at == None).first()
+
+        if course:
+            courseid = course.id
+        else:
+            return f"No course with name {coursename} is available"
+
+        query = Course_Teacher.insert().values(
+            courseid = courseid,
+            teacherid = teacherid
+        )
+
+        db.session.execute(query)
+        db.session.commit()
+
+        return "teacher is succesfully assigned to course"
+    except OperationalError:
+        response = {"error":"Please fill all fields"}
+        return response
+    except IntegrityError:
+        response = {"Message":"This teacher is already assigned to same course"}
+        return response
+    
+@assignment.route('/getcourses',methods = ['GET'])
+def getcourses():
+    """Endpoint for retriving all courses from course table
+    Method
+    ------
+        GET
+
+    Returns
+    -------
+        JSON:
+            data of all available courses from course table
+    Raises
+    ------
+        Operational Error:
+            if there is database connection issue  
+    """
+    try:
+        records = Course.query.filter(Course.deleted_at == None).all()
+        result = []
+        for record in records:
+            result.append({
+                    "name":record.name,
+                    "description":record.description,
+                    "instructor":record.instructor,
+                    "duration":record.duration,
+                    "start_date":record.start_date
+                })
+            
+        return result
+    except OperationalError:
+        response = {"error":"Please check database connection"}
+        return response
 
 
-
-
-@assignment.route('/courses/<id>',methods = ['GET'])
+@assignment.route('/getcourse/<id>',methods = ['GET'])
 def getcourse(id):
-    # function to retrive a single course by id
+    """Endpoint for retriving a single course by id from course table
+    
+    Method
+    ------
+        GET
+
+    Paramter
+    --------
+        id:int
+            id of course which we want to retrive
+
+    Returns
+    -------
+        JSON:
+            data of course of given id
+        string:
+            stating that no course with given id is present
+
+    Raises
+    ------
+        Operational Error:
+            if there is database connection issue
+    """
     courseid = id
     
     # filter accepts multiple conditions where 
@@ -388,32 +596,54 @@ def getcourse(id):
     
     return result
 
-@assignment.route('/courses/<id>',methods = ['PUT'])
+@assignment.route('/updatecourse/<id>',methods = ['PUT'])
 def updatecourse(id):
-    # function to update a course of given id passed as an argument
+    """Endpoint for updating a course record by id in course table
+
+    Method
+    ------
+        PUT
+
+    Paramter
+    --------
+        id:int
+            id of course that needs to be updated
+
+    Returns
+    -------
+        string:
+            states course is updated or 
+            course not available with given id
+    Raises
+    ------
+        Operational Error:
+            if any of parameters are missing or
+            database connection issue
+    """
 
     try:
-        if request.form['name'] == "":
+        data = request.get_json()
+        if data['name'] == "":
             return "Name is empty"
         
-        if request.form['description'] == "":
+        if data['description'] == "":
             return "description is empty"
         
-        if request.form['instructor'] == "":
+        if data['instructor'] == "":
             return "instructor is empty"
         
-        if request.form['duration'] == "":
+        if data['duration'] == "":
             return "duration is empty"
         
-        if request.form['start_date'] == "":
+        if data['start_date'] == "":
             return "start_date is empty"
         
         courseid = id
-        name = request.form['name']
-        description = request.form['description']
-        instructor = request.form['instructor']
-        duration = request.form['duration']
-        start_date = request.form['start_date']
+        name = data['name']
+        description = data['description']
+        instructor = data['instructor']
+        duration = data['duration']
+        start_date = data['start_date']
 
 
         record = Course.query.filter(Course.id == courseid,\
@@ -435,9 +665,29 @@ def updatecourse(id):
         return response
     
 
-@assignment.route('/courses/<id>',methods = ['DELETE'])
+@assignment.route('/deletecourse/<id>',methods = ['DELETE'])
 def deletecourse(id):
-    # function to delete a perticular course
+    """Endpoint for deleting course from course table
+
+    Method
+    ------
+        DELETE
+
+    Paramter
+    --------
+        id:int
+            id of course to delete
+
+    Returns
+    -------
+        string:
+            states if course is deleted or 
+            course not present with given id
+    Raises
+    ------
+        Operational Error:
+            in case of database connection issue
+    """
     try:
         courseid = id
 
@@ -455,9 +705,29 @@ def deletecourse(id):
         response = "Exception is occured"+str(e)
         return response
         
-@assignment.route('/students/<id>',methods = ['GET'])
+
+@assignment.route('/getstudents/<id>',methods = ['GET'])
 def getstudent(id):
-    # function to retrive a list of students enrolled to a specific Course
+    """Endpoint for retriving data of students who are 
+        enrolled to specific course
+    Method
+    ------
+        GET
+
+    Paramter
+    --------
+        id:int
+            id of course
+
+    Returns
+    -------
+        JSON:
+            data of students enrolled to specific course
+    Raises
+    ------
+        Operational Error:
+            if there is database connection issue
+    """
     try:
         courseid = id
 
@@ -494,9 +764,29 @@ def getstudent(id):
         return response
 
 
-@assignment.route('/teachers/<id>',methods = ['GET'])
+@assignment.route('/getteachers/<id>',methods = ['GET'])
 def getteachers(id):
-    # function to retrive list of teachers who are assigned to a single course
+    # 
+    """Endpoint for retriving list of teachers 
+        who are assigned to specific course 
+    Method
+    ------
+        GET
+
+    Paramter
+    --------
+        id:int
+            id of course
+
+    Returns
+    -------
+        JSON:
+            data of teachers assigned to specific course
+    Raises
+    ------
+        Operational Error:
+            if there is database connection issue
+    """
     try:
 
         courseid = id
@@ -524,17 +814,44 @@ def getteachers(id):
 
 @assignment.route('/login',methods = ['POST'])
 def login():
-    # function to login a teacher
+    """Endpoint for Allowing teacher to login
+
+    Method
+    ------
+        POST
+
+    Paramter
+    --------
+        email:str
+            required:true
+            email address of teacher
+        password:str
+            required:true
+            password of teacher
+
+    Returns
+    -------
+        string:
+            Json web token if login successfull or 
+            login failed message
+    Raises
+    ------
+        Operational Error:
+            if there is database connection issue
+    """
     try:
-        if request.form['email'] == "":
+        data = request.get_json()
+
+        if data['email'] == "":
             return "email is empty"
             
-        if request.form['password'] == "":
+        if data['password'] == "":
             return "password is empty"
         
-        email = request.form['email']
-        password = request.form['password']
+        email = data['email']
+        password = data['password']
 
+        
         result = Teacher.query.filter(Teacher.email == email).first()
 
         if not result:
@@ -553,7 +870,6 @@ def login():
     except Exception as e:
         response = {"error":"Exception is occured " + type(e).__name__ + " "+str(e)}
         return response
-
 
 if __name__ == "__main__":
     assignment.run(debug=True)
